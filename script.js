@@ -100,7 +100,7 @@ function renderGallery(items) {
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'media-button';
-    trigger.setAttribute('aria-label', `Open ${item.title} in modal view`);
+    trigger.setAttribute('aria-label', `Open ${item.title || 'APOD entry'} in modal view`);
 
     const mediaWrap = document.createElement('div');
     mediaWrap.className = 'media-wrap';
@@ -140,24 +140,30 @@ function renderGallery(items) {
 
 function createPreviewMedia(item) {
   if (item.media_type === 'video') {
-    const embedUrl = getVideoEmbedUrl(item.url);
+    const preview = document.createElement('div');
+    preview.className = 'video-preview';
 
-    if (embedUrl) {
-      const iframe = document.createElement('iframe');
-      iframe.src = embedUrl;
-      iframe.title = item.title || 'NASA APOD video';
-      iframe.loading = 'lazy';
-      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-      iframe.allowFullscreen = true;
-      iframe.tabIndex = -1;
-      return iframe;
+    const thumbnail = getVideoThumbnailUrl(item.url);
+    if (thumbnail) {
+      const img = document.createElement('img');
+      img.src = thumbnail;
+      img.alt = item.title || 'NASA APOD video thumbnail';
+      img.loading = 'lazy';
+      preview.appendChild(img);
+    } else {
+      const fallback = document.createElement('div');
+      fallback.className = 'video-fallback';
+      fallback.textContent = 'APOD Video';
+      preview.appendChild(fallback);
     }
 
-    const fallback = document.createElement('div');
-    fallback.className = 'video-fallback';
-    fallback.textContent = '▶ APOD Video';
-    return fallback;
+    const playIcon = document.createElement('span');
+    playIcon.className = 'play-icon';
+    playIcon.setAttribute('aria-hidden', 'true');
+    playIcon.textContent = '▶';
+    preview.appendChild(playIcon);
+
+    return preview;
   }
 
   const img = document.createElement('img');
@@ -183,11 +189,12 @@ function openModal(item) {
       iframe.referrerPolicy = 'strict-origin-when-cross-origin';
       iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
       iframe.allowFullscreen = true;
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-popups');
       modalMedia.appendChild(iframe);
     } else {
       const fallback = document.createElement('div');
       fallback.className = 'modal-video-fallback';
-      fallback.innerHTML = `<div><p>This APOD entry is a video hosted externally.</p><p><a href="${item.url}" target="_blank" rel="noopener noreferrer">Open video source</a></p></div>`;
+      fallback.innerHTML = `<div><p>This APOD entry is a video hosted externally.</p><p><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Open video source</a></p></div>`;
       modalMedia.appendChild(fallback);
     }
   } else {
@@ -217,12 +224,12 @@ function getVideoEmbedUrl(url) {
 
     if (parsed.hostname.includes('youtube.com')) {
       const id = parsed.searchParams.get('v');
-      return id ? `https://www.youtube.com/embed/${id}` : url;
+      return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0` : '';
     }
 
     if (parsed.hostname.includes('youtu.be')) {
       const id = parsed.pathname.replace('/', '');
-      return id ? `https://www.youtube.com/embed/${id}` : url;
+      return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0` : '';
     }
 
     if (parsed.hostname.includes('player.vimeo.com')) {
@@ -231,7 +238,29 @@ function getVideoEmbedUrl(url) {
 
     if (parsed.hostname.includes('vimeo.com')) {
       const id = parsed.pathname.split('/').filter(Boolean).pop();
-      return id ? `https://player.vimeo.com/video/${id}` : url;
+      return id ? `https://player.vimeo.com/video/${id}` : '';
+    }
+
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+function getVideoThumbnailUrl(url) {
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.hostname.includes('youtube.com')) {
+      const id = parsed.searchParams.get('v');
+      return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
+    }
+
+    if (parsed.hostname.includes('youtu.be')) {
+      const id = parsed.pathname.replace('/', '');
+      return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
     }
 
     return '';
@@ -241,7 +270,7 @@ function getVideoEmbedUrl(url) {
 }
 
 function renderMessage(message, type = 'empty') {
-  gallery.innerHTML = `<div class="${type === 'error' ? 'error-note' : 'empty-note'}"><p>${message}</p></div>`;
+  gallery.innerHTML = `<div class="${type === 'error' ? 'error-note' : 'empty-note'}"><p>${escapeHtml(message)}</p></div>`;
 }
 
 function setLoading(isLoading) {
@@ -258,4 +287,13 @@ function showRandomFact() {
 
 function truncateText(text, limit) {
   return text.length > limit ? `${text.slice(0, limit).trim()}…` : text;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
